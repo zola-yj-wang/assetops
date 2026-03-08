@@ -1,6 +1,10 @@
+from django.core.exceptions import ValidationError
 from django.db import models
-from apps.employees.models import Employee
+from django.db.models import Q
+
 from apps.assets.models import Asset
+from apps.employees.models import Employee
+
 
 class Assignment(models.Model):
 
@@ -20,7 +24,7 @@ class Assignment(models.Model):
         related_name="assignments",
     )
 
-    updated_at = models.DateTimeField()
+    updated_at = models.DateTimeField(auto_now=True)
 
     status = models.CharField(
         max_length=20,
@@ -34,11 +38,55 @@ class Assignment(models.Model):
 
     class Meta:
         ordering = ["-updated_at"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["asset"],
+                condition=Q(status="ASSIGNED"),
+                name="unique_active_assignment_per_asset",
+            )
+        ]
 
     def __str__(self):
         return f"{self.asset.asset_tag} → {self.employee}"
-    
+
+    def clean(self):
+        super().clean()
+
+        if self.status == self.AssignmentStatus.ASSIGNED:
+            allowed_employee_statuses = {
+                Employee.EmploymentStatus.ACTIVE,
+                Employee.EmploymentStatus.ONBOARDING,
+            }
+            if self.employee.employment_status not in allowed_employee_statuses:
+                raise ValidationError(
+                    {"employee": "Only onboarding or active employees can receive assets."}
+                )
+
+        if self.status == self.AssignmentStatus.ASSIGNED and self._state.adding:
+            if self.asset.status != Asset.AssetStatus.IN_STOCK:
+                raise ValidationError(
+                    {"asset": "Only in-stock assets can be assigned."}
+                )
+
+        if self.status == self.AssignmentStatus.RETURNED and self._state.adding:
+            raise ValidationError(
+                {"status": "Cannot create a returned assignment directly."}
+            )
+
+        if not self._state.adding:
+            previous = (
+                Assignment.objects.only("status").get(pk=self.pk)
+            )
+            if (
+                previous.status == self.AssignmentStatus.RETURNED
+                and self.status != self.AssignmentStatus.RETURNED
+            ):
+                raise ValidationError(
+                    {"status": "Returned assignments are immutable and cannot be reopened."}
+                )
+
     def save(self, *args, **kwargs):
+        self.full_clean()
         super().save(*args, **kwargs)
 
         if self.status == self.AssignmentStatus.ASSIGNED:
@@ -46,4 +94,4 @@ class Assignment(models.Model):
         elif self.status == self.AssignmentStatus.RETURNED:
             self.asset.status = Asset.AssetStatus.IN_STOCK
 
-        self.asset.save()
+        self.asset.save(update_fields=["status", "updated_at"])
