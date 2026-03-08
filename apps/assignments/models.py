@@ -52,22 +52,6 @@ class Assignment(models.Model):
     def clean(self):
         super().clean()
 
-        if self.status == self.AssignmentStatus.ASSIGNED:
-            allowed_employee_statuses = {
-                Employee.EmploymentStatus.ACTIVE,
-                Employee.EmploymentStatus.ONBOARDING,
-            }
-            if self.employee.employment_status not in allowed_employee_statuses:
-                raise ValidationError(
-                    {"employee": "Only onboarding or active employees can receive assets."}
-                )
-
-        if self.status == self.AssignmentStatus.ASSIGNED and self._state.adding:
-            if self.asset.status != Asset.AssetStatus.IN_STOCK:
-                raise ValidationError(
-                    {"asset": "Only in-stock assets can be assigned."}
-                )
-
         if self.status == self.AssignmentStatus.RETURNED and self._state.adding:
             raise ValidationError(
                 {"status": "Cannot create a returned assignment directly."}
@@ -84,14 +68,3 @@ class Assignment(models.Model):
                 raise ValidationError(
                     {"status": "Returned assignments are immutable and cannot be reopened."}
                 )
-
-    def save(self, *args, **kwargs):
-        self.full_clean()
-        super().save(*args, **kwargs)
-
-        if self.status == self.AssignmentStatus.ASSIGNED:
-            self.asset.status = Asset.AssetStatus.ASSIGNED
-        elif self.status == self.AssignmentStatus.RETURNED:
-            self.asset.status = Asset.AssetStatus.IN_STOCK
-
-        self.asset.save(update_fields=["status", "updated_at"])
