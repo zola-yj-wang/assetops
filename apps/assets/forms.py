@@ -16,5 +16,6 @@ class AssetForm(forms.ModelForm):
             "purchase_cost",
             "depreciation_months",
             "status",
+            "physical_location",
             "notes",
         ]

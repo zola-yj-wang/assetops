@@ -90,6 +90,21 @@ class AssignmentServiceTestCase(TestCase):
         self.assertEqual(updated.status, Assignment.AssignmentStatus.RETURNED)
         self.assertEqual(self.asset.status, Asset.AssetStatus.IN_STOCK)
 
+    def test_return_asset_can_update_physical_location(self):
+        assignment = assign_asset(employee=self.employee_active, asset=self.asset)
+
+        return_asset(
+            assignment=assignment,
+            physical_location=Asset.PhysicalLocation.SERVER_ROOM,
+        )
+
+        self.asset.refresh_from_db()
+        self.assertEqual(self.asset.status, Asset.AssetStatus.IN_STOCK)
+        self.assertEqual(
+            self.asset.physical_location,
+            Asset.PhysicalLocation.SERVER_ROOM,
+        )
+
     def test_return_asset_rejects_non_active_assignment(self):
         assignment = assign_asset(employee=self.employee_active, asset=self.asset)
         return_asset(assignment=assignment)

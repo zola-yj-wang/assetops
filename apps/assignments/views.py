@@ -89,14 +89,19 @@ def assign_submit_view(request):
 def return_submit_view(request, assignment_id):
     assignment = get_object_or_404(Assignment, pk=assignment_id)
     notes = request.POST.get("notes")
+    physical_location = request.POST.get("physical_location")
 
     try:
-        return_asset(assignment=assignment, notes=notes)
+        return_asset(
+            assignment=assignment,
+            notes=notes,
+            physical_location=physical_location,
+        )
         messages.success(request, "Asset returned successfully.")
     except ValidationError as exc:
         messages.error(request, str(_format_validation_error(exc)))
 
-    return redirect("assignment-dashboard")
+    return redirect(_resolve_next_url(request, "assignment-dashboard"))
 
 
 @require_POST
@@ -217,6 +222,7 @@ def return_asset_view(request, assignment_id):
         updated = return_asset(
             assignment=assignment,
             notes=payload.get("notes"),
+            physical_location=payload.get("physical_location"),
         )
     except ValidationError as exc:
         return JsonResponse({"errors": _format_validation_error(exc)}, status=400)

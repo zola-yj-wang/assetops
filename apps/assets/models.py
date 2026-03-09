@@ -1,3 +1,4 @@
+from django.core.exceptions import ValidationError
 from django.db import models
 
 class Asset(models.Model):
@@ -16,6 +17,13 @@ class Asset(models.Model):
         IN_REPAIR = "IN_REPAIR", "In repair"
         RETIRED = "RETIRED", "Retired"
         LOST = "LOST", "Lost"
+
+    class PhysicalLocation(models.TextChoices):
+        IT_ROOM = "IT_ROOM", "IT room"
+        SERVER_ROOM = "SERVER_ROOM", "Server room"
+        RECEPTION = "RECEPTION", "Reception"
+        WITH_OWNER = "WITH_OWNER", "With owner"
+        OTHER = "OTHER", "Other"
 
     asset_tag = models.CharField(max_length=50, unique=True)
     serial_number = models.CharField(max_length=100, unique=True)
@@ -39,12 +47,25 @@ class Asset(models.Model):
         choices=AssetStatus.choices,
         default=AssetStatus.IN_STOCK,
     )
+    physical_location = models.CharField(
+        max_length=20,
+        choices=PhysicalLocation.choices,
+        default=PhysicalLocation.IT_ROOM,
+        blank=True,
+    )
     notes = models.TextField(blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
         ordering = ["asset_tag"]
+
+    def clean(self):
+        super().clean()
+        if self.status == self.AssetStatus.IN_STOCK and not self.physical_location:
+            raise ValidationError(
+                {"physical_location": "Physical location is required for in-stock assets."}
+            )
 
     def __str__(self):
         return f"{self.asset_tag} ({self.asset_type})"

@@ -51,7 +51,12 @@ def assign_asset(*, employee: Employee, asset: Asset, notes: str = "") -> Assign
         return assignment
 
 
-def return_asset(*, assignment: Assignment, notes: Optional[str] = None) -> Assignment:
+def return_asset(
+    *,
+    assignment: Assignment,
+    notes: Optional[str] = None,
+    physical_location: Optional[str] = None,
+) -> Assignment:
     with transaction.atomic():
         locked_assignment = Assignment.objects.select_for_update().select_related(
             "asset"
@@ -72,7 +77,15 @@ def return_asset(*, assignment: Assignment, notes: Optional[str] = None) -> Assi
 
         locked_asset = locked_assignment.asset
         locked_asset.status = Asset.AssetStatus.IN_STOCK
-        locked_asset.save(update_fields=["status", "updated_at"])
+        update_fields = ["status", "updated_at"]
+        if physical_location:
+            valid_physical_locations = {choice[0] for choice in Asset.PhysicalLocation.choices}
+            if physical_location not in valid_physical_locations:
+                raise ValidationError({"physical_location": "Invalid physical location."})
+            locked_asset.physical_location = physical_location
+            update_fields.append("physical_location")
+
+        locked_asset.save(update_fields=update_fields)
         return locked_assignment
 
 

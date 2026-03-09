@@ -9,7 +9,15 @@ from apps.employees.models import Employee
 
 
 def asset_list_view(request):
+    selected_asset_types = request.GET.getlist("asset_type")
+    valid_asset_types = {choice[0] for choice in Asset.AssetType.choices}
+    selected_asset_types = [
+        asset_type for asset_type in selected_asset_types if asset_type in valid_asset_types
+    ]
+
     assets = Asset.objects.order_by("asset_tag")
+    if selected_asset_types:
+        assets = assets.filter(asset_type__in=selected_asset_types)
     eligible_employees = list(
         Employee.objects.filter(
             employment_status__in=[
@@ -42,6 +50,9 @@ def asset_list_view(request):
 
     context = {
         "asset_rows": asset_rows,
+        "asset_type_choices": Asset.AssetType.choices,
+        "physical_location_choices": Asset.PhysicalLocation.choices,
+        "selected_asset_types": selected_asset_types,
     }
     return render(request, "assets/list.html", context)
 
