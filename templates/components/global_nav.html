@@ -1,0 +1,53 @@
+<style>
+  .global-nav {
+    position: sticky;
+    top: 0;
+    z-index: 20;
+    backdrop-filter: blur(10px);
+    background: rgba(255, 255, 255, 0.92);
+    border-bottom: 1px solid #dbe3ef;
+  }
+  .global-nav-inner {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 12px 24px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+  .global-nav-brand {
+    font-weight: 800;
+    color: #0f1f35;
+    letter-spacing: 0.02em;
+    font-size: 14px;
+    text-decoration: none;
+  }
+  .global-nav-links {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  .global-nav-links a {
+    text-decoration: none;
+    color: #1d4ed8;
+    background: #e8f0ff;
+    border: 1px solid #c7d5ff;
+    padding: 7px 10px;
+    border-radius: 999px;
+    font-size: 13px;
+    font-weight: 700;
+  }
+</style>
+<nav class="global-nav">
+  <div class="global-nav-inner">
+    <a class="global-nav-brand" href="{% url 'assignment-dashboard' %}">AssetOps</a>
+    <div class="global-nav-links">
+      <a href="{% url 'assignment-dashboard' %}">Assignment Dashboard</a>
+      <a href="{% url 'asset-list' %}">Asset List</a>
+      <a href="{% url 'employee-list' %}">Employee List</a>
+      <a href="/admin/">Admin</a>
+    </div>
+  </div>
+</nav>

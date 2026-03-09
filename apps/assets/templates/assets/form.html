@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ page_title }}</title>
+  <style>
+    :root {
+      --bg: #f4f7fc;
+      --panel: #ffffff;
+      --ink: #0f1f35;
+      --muted: #5c6b82;
+      --border: #d9e1ef;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Avenir Next", "Segoe UI", sans-serif;
+      color: var(--ink);
+      background: radial-gradient(circle at 100% 0%, #dff4ec 0%, transparent 30%), var(--bg);
+    }
+    .wrap { max-width: 780px; margin: 0 auto; padding: 24px; }
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 16px;
+      box-shadow: 0 10px 24px rgba(15, 31, 53, 0.05);
+    }
+    h1 { margin: 0 0 12px; }
+    .grid { display: grid; gap: 10px; }
+    label { display: block; margin-bottom: 4px; color: var(--muted); font-size: 13px; }
+    input, select, textarea {
+      width: 100%;
+      border: 1px solid var(--border);
+      border-radius: 9px;
+      padding: 9px 10px;
+      font-size: 14px;
+    }
+    textarea { min-height: 80px; }
+    .actions { display: flex; gap: 8px; margin-top: 12px; }
+    .actions button, .actions a {
+      text-decoration: none;
+      border: none;
+      border-radius: 9px;
+      padding: 9px 12px;
+      font-weight: 700;
+      font-size: 14px;
+      cursor: pointer;
+    }
+    .actions button { background: #1d4ed8; color: white; }
+    .actions a { background: #edf2ff; color: #1d4ed8; }
+    .errorlist { color: #b91c1c; margin: 0 0 4px; padding-left: 16px; }
+  </style>
+</head>
+<body>
+  {% include "components/global_nav.html" %}
+  <main class="wrap">
+    <section class="panel">
+      <h1>{{ page_title }}</h1>
+      <form method="post">
+        {% csrf_token %}
+        <div class="grid">
+          {% for field in form %}
+            <div>
+              <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+              {{ field.errors }}
+              {{ field }}
+            </div>
+          {% endfor %}
+        </div>
+        <div class="actions">
+          <button type="submit">{{ submit_label }}</button>
+          <a href="{% url 'asset-list' %}">Cancel</a>
+        </div>
+      </form>
+    </section>
+  </main>
+</body>
+</html>

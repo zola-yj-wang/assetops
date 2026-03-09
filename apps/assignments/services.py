@@ -7,7 +7,7 @@ from apps.assets.models import Asset
 from apps.employees.models import Employee
 
 
-def assign_asset(*, employee: Employee, asset: Asset, notes: str = "") -> Assignment:
+def _validate_employee_can_receive_asset(employee: Employee) -> None:
     allowed_employee_statuses = {
         Employee.EmploymentStatus.ACTIVE,
         Employee.EmploymentStatus.ONBOARDING,
@@ -17,10 +17,25 @@ def assign_asset(*, employee: Employee, asset: Asset, notes: str = "") -> Assign
             {"employee": "Only onboarding or active employees can receive assets."}
         )
 
+
+def assign_asset(*, employee: Employee, asset: Asset, notes: str = "") -> Assignment:
+    _validate_employee_can_receive_asset(employee)
+
     with transaction.atomic():
         locked_asset = Asset.objects.select_for_update().get(pk=asset.pk)
+        existing_active_assignment = Assignment.objects.filter(
+            asset=locked_asset,
+            status=Assignment.AssignmentStatus.ASSIGNED,
+        ).first()
+        if existing_active_assignment is not None:
+            raise ValidationError(
+                {"asset": "This asset is already assigned and cannot be assigned twice."}
+            )
+
         if locked_asset.status != Asset.AssetStatus.IN_STOCK:
-            raise ValidationError({"asset": "Only in-stock assets can be assigned."})
+            raise ValidationError(
+                {"asset": "This asset is not in stock and cannot be assigned."}
+            )
 
         assignment = Assignment(
             employee=employee,
@@ -43,7 +58,11 @@ def return_asset(*, assignment: Assignment, notes: Optional[str] = None) -> Assi
         ).get(pk=assignment.pk)
 
         if locked_assignment.status != Assignment.AssignmentStatus.ASSIGNED:
-            raise ValidationError({"status": "Only active assignments can be returned."})
+            raise ValidationError(
+                {
+                    "status": "This assignment is already returned or inactive and cannot be returned again."
+                }
+            )
 
         if notes is not None:
             locked_assignment.notes = notes
@@ -70,3 +89,50 @@ def offboarding_check(*, employee: Employee) -> dict:
         "active_assignments": active_assignments,
         "active_assignment_count": len(active_assignments),
     }
+
+
+def transfer_asset(
+    *,
+    assignment: Assignment,
+    to_employee: Employee,
+    notes: str = "",
+) -> Assignment:
+    _validate_employee_can_receive_asset(to_employee)
+
+    with transaction.atomic():
+        locked_assignment = Assignment.objects.select_for_update().select_related(
+            "asset",
+            "employee",
+        ).get(pk=assignment.pk)
+        locked_asset = Asset.objects.select_for_update().get(pk=locked_assignment.asset_id)
+
+        if locked_assignment.status != Assignment.AssignmentStatus.ASSIGNED:
+            raise ValidationError(
+                {"status": "Only active assignments can be transferred."}
+            )
+
+        if locked_assignment.employee_id == to_employee.id:
+            raise ValidationError(
+                {"employee": "Transfer target must be a different employee."}
+            )
+
+        locked_assignment.status = Assignment.AssignmentStatus.RETURNED
+        locked_assignment.full_clean()
+        locked_assignment.save(update_fields=["status", "updated_at"])
+
+        locked_asset.status = Asset.AssetStatus.IN_STOCK
+        locked_asset.save(update_fields=["status", "updated_at"])
+
+        new_assignment = Assignment(
+            employee=to_employee,
+            asset=locked_asset,
+            status=Assignment.AssignmentStatus.ASSIGNED,
+            notes=notes,
+        )
+        new_assignment.full_clean()
+        new_assignment.save()
+
+        locked_asset.status = Asset.AssetStatus.ASSIGNED
+        locked_asset.save(update_fields=["status", "updated_at"])
+
+        return new_assignment

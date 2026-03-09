@@ -1,0 +1,167 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Employee List</title>
+  <style>
+    :root {
+      --bg: #f5f8fd;
+      --panel: #ffffff;
+      --ink: #14233a;
+      --muted: #5d6c84;
+      --border: #dbe3ef;
+      --chip-bg: #e8f0ff;
+      --chip-ink: #1e429f;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Avenir Next", "Segoe UI", sans-serif;
+      color: var(--ink);
+      background:
+        radial-gradient(circle at 100% 0%, #e0f5ec 0%, transparent 28%),
+        radial-gradient(circle at 0% 0%, #e4ecff 0%, transparent 33%),
+        var(--bg);
+    }
+    .wrap {
+      max-width: 980px;
+      margin: 0 auto;
+      padding: 24px;
+      display: grid;
+      gap: 14px;
+    }
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 16px;
+      box-shadow: 0 10px 24px rgba(20, 35, 58, 0.05);
+    }
+    .header {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+    .actions-top a {
+      text-decoration: none;
+      color: #166534;
+      background: #e8f8ef;
+      border: 1px solid #cfe9d6;
+      padding: 8px 12px;
+      border-radius: 10px;
+      font-weight: 700;
+      font-size: 13px;
+      display: inline-block;
+    }
+    h1 { margin: 0; font-size: 30px; }
+    .subtitle { margin: 6px 0 0; color: var(--muted); }
+    table { width: 100%; border-collapse: collapse; font-size: 14px; }
+    th, td { padding: 10px; border-bottom: 1px solid var(--border); text-align: left; }
+    th { color: var(--muted); font-weight: 600; }
+    .name-link {
+      color: #1d4ed8;
+      text-decoration: none;
+      font-weight: 700;
+    }
+    .empty { color: var(--muted); }
+    .messages { display: grid; gap: 8px; }
+    .msg {
+      padding: 10px 12px;
+      border-radius: 10px;
+      font-size: 13px;
+    }
+    .msg.success { background: #e8f8ef; color: #166534; }
+    .msg.error { background: #fdecec; color: #b91c1c; }
+    .row-actions {
+      display: grid;
+      gap: 8px;
+      min-width: 120px;
+    }
+    .row-actions a,
+    .row-actions button {
+      width: 100%;
+      text-align: center;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      padding: 7px 9px;
+      font-size: 13px;
+      text-decoration: none;
+      background: #f8fbff;
+      color: #1d4ed8;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    .row-actions button {
+      background: #fdecec;
+      color: #b91c1c;
+      border-color: #f5c3c3;
+    }
+  </style>
+</head>
+<body>
+  {% include "components/global_nav.html" %}
+  <main class="wrap">
+    {% if messages %}
+      <section class="messages">
+        {% for message in messages %}
+          <div class="msg {{ message.tags|default:'success' }}">{{ message }}</div>
+        {% endfor %}
+      </section>
+    {% endif %}
+    <section class="panel header">
+      <div>
+        <h1>Employee List</h1>
+        <p class="subtitle">Browse employees and open full detail pages.</p>
+      </div>
+      <div class="actions-top">
+        <a href="{% url 'employee-create' %}">+ Create Employee</a>
+      </div>
+    </section>
+
+    <section class="panel">
+      {% if employees %}
+        <table>
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Email</th>
+              <th>Department</th>
+              <th>Status</th>
+              <th>Location</th>
+              <th>Manage</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for employee in employees %}
+              <tr>
+                <td>
+                  <a class="name-link" href="{% url 'employee-detail' employee.id %}">
+                    {{ employee.first_name }} {{ employee.last_name }}
+                  </a>
+                </td>
+                <td>{{ employee.email }}</td>
+                <td>{{ employee.department }}</td>
+                <td>{{ employee.employment_status }}</td>
+                <td>{{ employee.location|default:"-" }}</td>
+                <td>
+                  <div class="row-actions">
+                    <a href="{% url 'employee-update' employee.id %}">Edit</a>
+                    <form method="post" action="{% url 'employee-delete' employee.id %}">
+                      {% csrf_token %}
+                      <button type="submit">Delete</button>
+                    </form>
+                  </div>
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      {% else %}
+        <p class="empty">No employees found.</p>
+      {% endif %}
+    </section>
+  </main>
+</body>
+</html>

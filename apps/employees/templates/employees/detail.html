@@ -1,0 +1,252 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Employee Detail</title>
+  <style>
+    :root {
+      --bg: #f5f8fd;
+      --panel: #ffffff;
+      --ink: #14233a;
+      --muted: #5d6c84;
+      --border: #dbe3ef;
+      --tag-bg: #e8f0ff;
+      --tag-ink: #1e429f;
+      --ok-bg: #e9f7ef;
+      --ok-ink: #166534;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Avenir Next", "Segoe UI", sans-serif;
+      color: var(--ink);
+      background:
+        radial-gradient(circle at 0% 10%, #e5edff 0%, transparent 35%),
+        radial-gradient(circle at 100% 0%, #e1f5ee 0%, transparent 30%),
+        var(--bg);
+    }
+    .wrap {
+      max-width: 980px;
+      margin: 0 auto;
+      padding: 24px;
+      display: grid;
+      gap: 14px;
+    }
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 16px;
+      box-shadow: 0 10px 24px rgba(20, 35, 58, 0.05);
+    }
+    .header { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+    .header-actions {
+      display: grid;
+      gap: 8px;
+      min-width: 140px;
+    }
+    .header-actions a,
+    .header-actions button {
+      width: 100%;
+      text-align: center;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      padding: 8px 10px;
+      font-size: 13px;
+      text-decoration: none;
+      background: #f8fbff;
+      color: #1d4ed8;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    .header-actions button {
+      background: #fdecec;
+      color: #b91c1c;
+      border-color: #f5c3c3;
+    }
+    h1 { margin: 0; font-size: 30px; }
+    h2 { margin: 0 0 10px; font-size: 18px; }
+    .subtitle { margin: 6px 0 0; color: var(--muted); }
+    .meta { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; }
+    .meta-item { border: 1px solid var(--border); border-radius: 10px; padding: 10px; }
+    .label { color: var(--muted); font-size: 12px; }
+    .value { margin-top: 4px; font-weight: 600; }
+    .badge {
+      display: inline-block;
+      font-size: 12px;
+      padding: 4px 8px;
+      border-radius: 999px;
+      background: var(--ok-bg);
+      color: var(--ok-ink);
+      font-weight: 700;
+    }
+    table { width: 100%; border-collapse: collapse; font-size: 14px; }
+    th, td { padding: 10px; border-bottom: 1px solid var(--border); text-align: left; }
+    th { color: var(--muted); font-weight: 600; }
+    .empty { color: var(--muted); }
+    .messages { display: grid; gap: 8px; }
+    .msg {
+      padding: 10px 12px;
+      border-radius: 10px;
+      font-size: 13px;
+    }
+    .msg.success { background: #e8f8ef; color: #166534; }
+    .msg.error { background: #fdecec; color: #b91c1c; }
+    .transfer-form {
+      display: grid;
+      gap: 8px;
+      min-width: 220px;
+    }
+    .transfer-form select,
+    .transfer-form input,
+    .transfer-form button {
+      width: 100%;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      padding: 7px 9px;
+      font-size: 13px;
+    }
+    .transfer-form button {
+      border: none;
+      background: linear-gradient(135deg, #1d4ed8, #2563eb);
+      color: white;
+      font-weight: 700;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+  {% include "components/global_nav.html" %}
+  <main class="wrap">
+    {% if messages %}
+      <section class="messages">
+        {% for message in messages %}
+          <div class="msg {{ message.tags|default:'success' }}">{{ message }}</div>
+        {% endfor %}
+      </section>
+    {% endif %}
+    <section class="panel header">
+      <div>
+        {% if employee %}
+          <h1>{{ employee.first_name }} {{ employee.last_name }}</h1>
+          <p class="subtitle">Employee detail and assignment lifecycle summary.</p>
+        {% else %}
+          <h1>Employee Not Found</h1>
+          <p class="subtitle">The requested employee id does not exist.</p>
+        {% endif %}
+      </div>
+      {% if employee %}
+        <div class="header-actions">
+          <a href="{% url 'employee-update' employee.id %}">Edit Employee</a>
+          <form method="post" action="{% url 'employee-delete' employee.id %}">
+            {% csrf_token %}
+            <button type="submit">Delete Employee</button>
+          </form>
+        </div>
+      {% endif %}
+    </section>
+
+    {% if employee %}
+      <section class="panel">
+        <h2>Profile</h2>
+        <div class="meta">
+          <div class="meta-item">
+            <div class="label">Email</div>
+            <div class="value">{{ employee.email }}</div>
+          </div>
+          <div class="meta-item">
+            <div class="label">Department</div>
+            <div class="value">{{ employee.department }}</div>
+          </div>
+          <div class="meta-item">
+            <div class="label">Employment Status</div>
+            <div class="value">{{ employee.employment_status }}</div>
+          </div>
+          <div class="meta-item">
+            <div class="label">Location</div>
+            <div class="value">{{ employee.location|default:"-" }}</div>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel">
+        <h2>Active Assignments</h2>
+        {% if active_assignments %}
+          <table>
+            <thead>
+              <tr>
+                <th>Asset Tag</th>
+                <th>Type</th>
+                <th>Assigned At</th>
+                <th>Transfer Owner</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for row in active_assignment_rows %}
+                {% with assignment=row.assignment candidates=row.transfer_candidates %}
+                <tr>
+                  <td>{{ assignment.asset.asset_tag }}</td>
+                  <td>{{ assignment.asset.asset_type }}</td>
+                  <td>{{ assignment.created_at }}</td>
+                  <td>
+                    <form class="transfer-form" method="post" action="{% url 'asset-transfer-owner-submit' assignment.asset_id %}">
+                      {% csrf_token %}
+                      <input type="hidden" name="next" value="{% url 'employee-detail' employee.id %}">
+                      <select name="to_employee_id" required>
+                        <option value="" selected disabled>Select new owner</option>
+                        {% for target in candidates %}
+                          <option value="{{ target.id }}">{{ target.first_name }} {{ target.last_name }} ({{ target.employment_status }})</option>
+                        {% endfor %}
+                      </select>
+                      <input type="text" name="notes" placeholder="Transfer notes (optional)">
+                      <button type="submit">Transfer</button>
+                    </form>
+                  </td>
+                </tr>
+                {% endwith %}
+              {% endfor %}
+            </tbody>
+          </table>
+        {% else %}
+          <p class="empty">No active assignments.</p>
+        {% endif %}
+      </section>
+
+      <section class="panel">
+        <h2>Assignment History</h2>
+        {% if assignment_history %}
+          <table>
+            <thead>
+              <tr>
+                <th>Asset Tag</th>
+                <th>Status</th>
+                <th>Updated At</th>
+                <th>Notes</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for assignment in assignment_history %}
+                <tr>
+                  <td>{{ assignment.asset.asset_tag }}</td>
+                  <td>
+                    {% if assignment.status == "ASSIGNED" %}
+                      <span class="badge">ASSIGNED</span>
+                    {% else %}
+                      <span class="badge">RETURNED</span>
+                    {% endif %}
+                  </td>
+                  <td>{{ assignment.updated_at }}</td>
+                  <td>{{ assignment.notes|default:"-" }}</td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        {% else %}
+          <p class="empty">No assignment history.</p>
+        {% endif %}
+      </section>
+    {% endif %}
+  </main>
+</body>
+</html>

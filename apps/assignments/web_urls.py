@@ -3,10 +3,9 @@ from django.urls import path
 from apps.assignments.views import (
     assignment_dashboard_view,
     assign_submit_view,
-    assign_asset_view,
-    offboarding_check_view,
+    transfer_owner_submit_view,
     return_submit_view,
-    return_asset_view,
+    transfer_submit_view,
 )
 
 urlpatterns = [
@@ -17,13 +16,14 @@ urlpatterns = [
         return_submit_view,
         name="assignment-return-submit",
     ),
-
-    # API endpoints
-    path("assign/", assign_asset_view, name="assignment-assign"),
-    path("<int:assignment_id>/return/", return_asset_view, name="assignment-return"),
     path(
-        "offboarding-check/<int:employee_id>/",
-        offboarding_check_view,
-        name="assignment-offboarding-check",
+        "actions/<int:assignment_id>/transfer/",
+        transfer_submit_view,
+        name="assignment-transfer-submit",
+    ),
+    path(
+        "actions/assets/<int:asset_id>/transfer-owner/",
+        transfer_owner_submit_view,
+        name="asset-transfer-owner-submit",
     ),
 ]
