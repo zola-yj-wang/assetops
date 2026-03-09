@@ -7,8 +7,16 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.http import require_GET, require_POST
+from rest_framework.exceptions import ValidationError as DRFValidationError
 
 from apps.assignments.models import Assignment
+from apps.assignments.serializers import (
+    AssignAssetRequestSerializer,
+    AssignmentResponseSerializer,
+    OffboardingCheckResponseSerializer,
+    ReturnAssetRequestSerializer,
+    TransferAssetRequestSerializer,
+)
 from apps.assignments.services import (
     assign_asset,
     offboarding_check,
@@ -72,13 +80,24 @@ def assignment_dashboard_view(request):
 
 @require_POST
 def assign_submit_view(request):
-    employee = get_object_or_404(Employee, pk=request.POST.get("employee_id"))
-    asset = get_object_or_404(Asset, pk=request.POST.get("asset_id"))
-    notes = request.POST.get("notes", "")
-
     try:
-        assign_asset(employee=employee, asset=asset, notes=notes)
+        request_serializer = AssignAssetRequestSerializer(
+            data={
+                "employee_id": request.POST.get("employee_id"),
+                "asset_id": request.POST.get("asset_id"),
+                "notes": request.POST.get("notes", ""),
+            }
+        )
+        request_serializer.is_valid(raise_exception=True)
+
+        assign_asset(
+            employee=request_serializer.validated_data["employee"],
+            asset=request_serializer.validated_data["asset"],
+            notes=request_serializer.validated_data.get("notes", ""),
+        )
         messages.success(request, "Asset assigned successfully.")
+    except DRFValidationError as exc:
+        messages.error(request, str(exc.detail))
     except ValidationError as exc:
         messages.error(request, str(_format_validation_error(exc)))
 
@@ -88,16 +107,25 @@ def assign_submit_view(request):
 @require_POST
 def return_submit_view(request, assignment_id):
     assignment = get_object_or_404(Assignment, pk=assignment_id)
-    notes = request.POST.get("notes")
-    physical_location = request.POST.get("physical_location")
 
     try:
+        request_serializer = ReturnAssetRequestSerializer(
+            data={
+                "notes": request.POST.get("notes"),
+                "physical_location": request.POST.get("physical_location"),
+            },
+            context={"require_physical_location": True},
+        )
+        request_serializer.is_valid(raise_exception=True)
+
         return_asset(
             assignment=assignment,
-            notes=notes,
-            physical_location=physical_location,
+            notes=request_serializer.validated_data.get("notes"),
+            physical_location=request_serializer.validated_data.get("physical_location"),
         )
         messages.success(request, "Asset returned successfully.")
+    except DRFValidationError as exc:
+        messages.error(request, str(exc.detail))
     except ValidationError as exc:
         messages.error(request, str(_format_validation_error(exc)))
 
@@ -107,22 +135,24 @@ def return_submit_view(request, assignment_id):
 @require_POST
 def transfer_submit_view(request, assignment_id):
     assignment = get_object_or_404(Assignment, pk=assignment_id)
-    to_employee_id = request.POST.get("to_employee_id")
-    notes = request.POST.get("notes", "")
 
     try:
-        if not to_employee_id:
-            raise ValidationError({"employee": "Please select a target employee."})
-        to_employee = Employee.objects.filter(pk=to_employee_id).first()
-        if to_employee is None:
-            raise ValidationError({"employee": "Target employee not found."})
+        request_serializer = TransferAssetRequestSerializer(
+            data={
+                "to_employee_id": request.POST.get("to_employee_id"),
+                "notes": request.POST.get("notes", ""),
+            }
+        )
+        request_serializer.is_valid(raise_exception=True)
 
         transfer_asset(
             assignment=assignment,
-            to_employee=to_employee,
-            notes=notes,
+            to_employee=request_serializer.validated_data["to_employee"],
+            notes=request_serializer.validated_data.get("notes", ""),
         )
         messages.success(request, "Asset owner transferred successfully.")
+    except DRFValidationError as exc:
+        messages.error(request, str(exc.detail))
     except ValidationError as exc:
         messages.error(request, str(_format_validation_error(exc)))
 
@@ -132,15 +162,17 @@ def transfer_submit_view(request, assignment_id):
 @require_POST
 def transfer_owner_submit_view(request, asset_id):
     asset = get_object_or_404(Asset, pk=asset_id)
-    to_employee_id = request.POST.get("to_employee_id")
-    notes = request.POST.get("notes", "")
 
     try:
-        if not to_employee_id:
-            raise ValidationError({"employee": "Please select a target employee."})
-        to_employee = Employee.objects.filter(pk=to_employee_id).first()
-        if to_employee is None:
-            raise ValidationError({"employee": "Target employee not found."})
+        request_serializer = TransferAssetRequestSerializer(
+            data={
+                "to_employee_id": request.POST.get("to_employee_id"),
+                "notes": request.POST.get("notes", ""),
+            }
+        )
+        request_serializer.is_valid(raise_exception=True)
+        to_employee = request_serializer.validated_data["to_employee"]
+        notes = request_serializer.validated_data.get("notes", "")
 
         if asset.status == Asset.AssetStatus.IN_STOCK:
             assign_asset(employee=to_employee, asset=asset, notes=notes)
@@ -164,6 +196,8 @@ def transfer_owner_submit_view(request, asset_id):
             raise ValidationError(
                 {"asset": "Only in-stock or assigned assets can transfer owner."}
             )
+    except DRFValidationError as exc:
+        messages.error(request, str(exc.detail))
     except ValidationError as exc:
         messages.error(request, str(_format_validation_error(exc)))
 
@@ -174,44 +208,30 @@ def transfer_owner_submit_view(request, asset_id):
 def assign_asset_view(request):
     try:
         payload = _parse_json_payload(request)
-        employee_id = payload.get("employee_id")
-        asset_id = payload.get("asset_id")
-        if not employee_id:
-            raise ValidationError({"employee": "employee_id is required."})
-        if not asset_id:
-            raise ValidationError({"asset": "asset_id is required."})
-
-        employee = Employee.objects.filter(pk=employee_id).first()
-        if employee is None:
-            raise ValidationError({"employee": "Employee not found."})
-
-        asset = Asset.objects.filter(pk=asset_id).first()
-        if asset is None:
-            raise ValidationError({"asset": "Asset not found."})
+        request_serializer = AssignAssetRequestSerializer(data=payload)
+        if not request_serializer.is_valid():
+            return JsonResponse({"errors": request_serializer.errors}, status=400)
 
         assignment = assign_asset(
-            employee=employee,
-            asset=asset,
-            notes=payload.get("notes", ""),
+            employee=request_serializer.validated_data["employee"],
+            asset=request_serializer.validated_data["asset"],
+            notes=request_serializer.validated_data.get("notes", ""),
         )
     except ValidationError as exc:
         return JsonResponse({"errors": _format_validation_error(exc)}, status=400)
 
-    return JsonResponse(
-        {
-            "id": assignment.id,
-            "status": assignment.status,
-            "employee_id": assignment.employee_id,
-            "asset_id": assignment.asset_id,
-        },
-        status=201,
-    )
+    response_serializer = AssignmentResponseSerializer(instance=assignment)
+    return JsonResponse(response_serializer.data, status=201)
 
 
 @require_POST
 def return_asset_view(request, assignment_id):
     try:
         payload = _parse_json_payload(request)
+        request_serializer = ReturnAssetRequestSerializer(data=payload)
+        if not request_serializer.is_valid():
+            return JsonResponse({"errors": request_serializer.errors}, status=400)
+
         assignment = Assignment.objects.filter(pk=assignment_id).first()
         if assignment is None:
             return JsonResponse(
@@ -221,20 +241,14 @@ def return_asset_view(request, assignment_id):
 
         updated = return_asset(
             assignment=assignment,
-            notes=payload.get("notes"),
-            physical_location=payload.get("physical_location"),
+            notes=request_serializer.validated_data.get("notes"),
+            physical_location=request_serializer.validated_data.get("physical_location"),
         )
     except ValidationError as exc:
         return JsonResponse({"errors": _format_validation_error(exc)}, status=400)
 
-    return JsonResponse(
-        {
-            "id": updated.id,
-            "status": updated.status,
-            "employee_id": updated.employee_id,
-            "asset_id": updated.asset_id,
-        }
-    )
+    response_serializer = AssignmentResponseSerializer(instance=updated)
+    return JsonResponse(response_serializer.data)
 
 
 @require_GET
@@ -246,8 +260,8 @@ def offboarding_check_view(request, employee_id):
             status=404,
         )
     result = offboarding_check(employee=employee)
-    return JsonResponse(
-        {
+    response_serializer = OffboardingCheckResponseSerializer(
+        data={
             "employee_id": result["employee_id"],
             "can_offboard": result["can_offboard"],
             "active_assignment_count": result["active_assignment_count"],
@@ -256,15 +270,17 @@ def offboarding_check_view(request, employee_id):
             ],
         }
     )
+    response_serializer.is_valid(raise_exception=True)
+    return JsonResponse(response_serializer.validated_data)
 
 
 @require_POST
 def transfer_asset_view(request, assignment_id):
     try:
         payload = _parse_json_payload(request)
-        to_employee_id = payload.get("to_employee_id")
-        if not to_employee_id:
-            raise ValidationError({"employee": "to_employee_id is required."})
+        request_serializer = TransferAssetRequestSerializer(data=payload)
+        if not request_serializer.is_valid():
+            return JsonResponse({"errors": request_serializer.errors}, status=400)
 
         assignment = Assignment.objects.filter(pk=assignment_id).first()
         if assignment is None:
@@ -273,24 +289,13 @@ def transfer_asset_view(request, assignment_id):
                 status=404,
             )
 
-        to_employee = Employee.objects.filter(pk=to_employee_id).first()
-        if to_employee is None:
-            raise ValidationError({"employee": "Employee not found."})
-
         new_assignment = transfer_asset(
             assignment=assignment,
-            to_employee=to_employee,
-            notes=payload.get("notes", ""),
+            to_employee=request_serializer.validated_data["to_employee"],
+            notes=request_serializer.validated_data.get("notes", ""),
         )
     except ValidationError as exc:
         return JsonResponse({"errors": _format_validation_error(exc)}, status=400)
 
-    return JsonResponse(
-        {
-            "id": new_assignment.id,
-            "status": new_assignment.status,
-            "employee_id": new_assignment.employee_id,
-            "asset_id": new_assignment.asset_id,
-        },
-        status=201,
-    )
+    response_serializer = AssignmentResponseSerializer(instance=new_assignment)
+    return JsonResponse(response_serializer.data, status=201)

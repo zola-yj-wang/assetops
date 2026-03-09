@@ -1,6 +1,6 @@
 from django.core.exceptions import ValidationError
 from django.test import TestCase
-from django.urls import reverse
+from django.urls import resolve, reverse
 
 from apps.assignments.models import Assignment
 from apps.assignments.services import (
@@ -203,6 +203,12 @@ class AssignmentModelValidationTestCase(TestCase):
             email="alan@example.com",
             employment_status=Employee.EmploymentStatus.ACTIVE,
         )
+        self.inactive_employee = Employee.objects.create(
+            first_name="Grace",
+            last_name="Hopper",
+            email="grace-model@example.com",
+            employment_status=Employee.EmploymentStatus.INACTIVE,
+        )
         self.asset = Asset.objects.create(
             asset_tag="LT-002",
             serial_number="SN-LT-002",
@@ -226,6 +232,37 @@ class AssignmentModelValidationTestCase(TestCase):
         assignment.status = Assignment.AssignmentStatus.ASSIGNED
         with self.assertRaises(ValidationError):
             assignment.full_clean()
+
+    def test_direct_create_rejects_inactive_employee(self):
+        with self.assertRaises(ValidationError) as exc:
+            Assignment.objects.create(employee=self.inactive_employee, asset=self.asset)
+        self.assertIn(
+            "Only onboarding or active employees can receive assets.",
+            exc.exception.message_dict["employee"],
+        )
+
+    def test_direct_create_rejects_non_stock_asset(self):
+        self.asset.status = Asset.AssetStatus.IN_REPAIR
+        self.asset.save(update_fields=["status", "updated_at"])
+
+        with self.assertRaises(ValidationError) as exc:
+            Assignment.objects.create(employee=self.employee, asset=self.asset)
+        self.assertIn(
+            "This asset is not in stock and cannot be assigned.",
+            exc.exception.message_dict["asset"],
+        )
+
+    def test_direct_create_rejects_double_assignment(self):
+        Assignment.objects.create(employee=self.employee, asset=self.asset)
+        another_employee = Employee.objects.create(
+            first_name="Ada",
+            last_name="Lovelace",
+            email="ada-model@example.com",
+            employment_status=Employee.EmploymentStatus.ACTIVE,
+        )
+
+        with self.assertRaises(ValidationError):
+            Assignment.objects.create(employee=another_employee, asset=self.asset)
 
 
 class AssignmentApiErrorMessageTestCase(TestCase):
@@ -351,3 +388,62 @@ class AssignmentWebTransferTestCase(TestCase):
             status=Assignment.AssignmentStatus.ASSIGNED,
         )
         self.assertEqual(new_assignment.employee_id, self.to_employee.id)
+
+
+class AssignmentUrlPatternTestCase(TestCase):
+    def test_assignments_web_routes_resolve_with_required_params(self):
+        self.assertEqual(resolve("/assignments/").view_name, "assignment-dashboard")
+        self.assertEqual(
+            resolve("/assignments/actions/1/return/").view_name,
+            "assignment-return-submit",
+        )
+        self.assertEqual(
+            resolve("/assignments/actions/1/transfer/").view_name,
+            "assignment-transfer-submit",
+        )
+        self.assertEqual(
+            resolve("/assignments/actions/assets/1/transfer-owner/").view_name,
+            "asset-transfer-owner-submit",
+        )
+
+    def test_assignments_api_routes_resolve_with_required_params(self):
+        self.assertEqual(resolve("/api/assignments/assign/").view_name, "assignment-assign")
+        self.assertEqual(
+            resolve("/api/assignments/1/return/").view_name,
+            "assignment-return",
+        )
+        self.assertEqual(
+            resolve("/api/assignments/1/transfer/").view_name,
+            "assignment-transfer",
+        )
+        self.assertEqual(
+            resolve("/api/assignments/offboarding-check/1/").view_name,
+            "assignment-offboarding-check",
+        )
+
+    def test_assets_and_employees_crud_routes_are_well_formed(self):
+        self.assertEqual(resolve("/assets/").view_name, "asset-list")
+        self.assertEqual(resolve("/assets/1/edit/").view_name, "asset-update")
+        self.assertEqual(resolve("/assets/1/delete/").view_name, "asset-delete")
+        self.assertEqual(resolve("/employees/").view_name, "employee-list")
+        self.assertEqual(resolve("/employees/1/").view_name, "employee-detail")
+        self.assertEqual(resolve("/employees/1/edit/").view_name, "employee-update")
+        self.assertEqual(resolve("/employees/1/delete/").view_name, "employee-delete")
+
+    def test_reverse_generates_clean_paths_without_double_slashes(self):
+        paths = [
+            reverse("assignment-dashboard"),
+            reverse("assignment-assign"),
+            reverse("assignment-return-submit", kwargs={"assignment_id": 1}),
+            reverse("assignment-return", kwargs={"assignment_id": 1}),
+            reverse("assignment-transfer-submit", kwargs={"assignment_id": 1}),
+            reverse("assignment-transfer", kwargs={"assignment_id": 1}),
+            reverse("assignment-offboarding-check", kwargs={"employee_id": 1}),
+            reverse("asset-update", kwargs={"asset_id": 1}),
+            reverse("asset-delete", kwargs={"asset_id": 1}),
+            reverse("employee-detail", kwargs={"employee_id": 1}),
+            reverse("employee-update", kwargs={"employee_id": 1}),
+            reverse("employee-delete", kwargs={"employee_id": 1}),
+        ]
+        for path in paths:
+            self.assertNotIn("//", path)
