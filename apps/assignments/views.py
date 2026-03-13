@@ -9,6 +9,8 @@ from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.http import require_GET, require_POST
 from rest_framework.exceptions import ValidationError as DRFValidationError
 
+from apps.accounts.decorators import assetops_operator_required
+from apps.accounts.services import notify_default_admin_group_for_change
 from apps.assignments.models import Assignment
 from apps.assignments.serializers import (
     AssignAssetRequestSerializer,
@@ -51,6 +53,7 @@ def _resolve_next_url(request, default_route_name):
     return reverse(default_route_name)
 
 
+@assetops_operator_required
 @require_GET
 def assignment_dashboard_view(request):
     employees = Employee.objects.order_by("last_name", "first_name")
@@ -78,6 +81,7 @@ def assignment_dashboard_view(request):
     return render(request, "assignments/dashboard.html", context)
 
 
+@assetops_operator_required
 @require_POST
 def assign_submit_view(request):
     try:
@@ -90,10 +94,17 @@ def assign_submit_view(request):
         )
         request_serializer.is_valid(raise_exception=True)
 
-        assign_asset(
+        assignment = assign_asset(
             employee=request_serializer.validated_data["employee"],
             asset=request_serializer.validated_data["asset"],
             notes=request_serializer.validated_data.get("notes", ""),
+        )
+        notify_default_admin_group_for_change(
+            actor=request.user,
+            resource_type="assignment",
+            action="assign",
+            object_label=str(assignment),
+            object_instance=assignment,
         )
         messages.success(request, "Asset assigned successfully.")
     except DRFValidationError as exc:
@@ -104,6 +115,7 @@ def assign_submit_view(request):
     return redirect("assignment-dashboard")
 
 
+@assetops_operator_required
 @require_POST
 def return_submit_view(request, assignment_id):
     assignment = get_object_or_404(Assignment, pk=assignment_id)
@@ -118,10 +130,17 @@ def return_submit_view(request, assignment_id):
         )
         request_serializer.is_valid(raise_exception=True)
 
-        return_asset(
+        updated_assignment = return_asset(
             assignment=assignment,
             notes=request_serializer.validated_data.get("notes"),
             physical_location=request_serializer.validated_data.get("physical_location"),
+        )
+        notify_default_admin_group_for_change(
+            actor=request.user,
+            resource_type="assignment",
+            action="return",
+            object_label=str(updated_assignment),
+            object_instance=updated_assignment,
         )
         messages.success(request, "Asset returned successfully.")
     except DRFValidationError as exc:
@@ -132,6 +151,7 @@ def return_submit_view(request, assignment_id):
     return redirect(_resolve_next_url(request, "assignment-dashboard"))
 
 
+@assetops_operator_required
 @require_POST
 def transfer_submit_view(request, assignment_id):
     assignment = get_object_or_404(Assignment, pk=assignment_id)
@@ -145,10 +165,17 @@ def transfer_submit_view(request, assignment_id):
         )
         request_serializer.is_valid(raise_exception=True)
 
-        transfer_asset(
+        new_assignment = transfer_asset(
             assignment=assignment,
             to_employee=request_serializer.validated_data["to_employee"],
             notes=request_serializer.validated_data.get("notes", ""),
+        )
+        notify_default_admin_group_for_change(
+            actor=request.user,
+            resource_type="assignment",
+            action="transfer",
+            object_label=str(new_assignment),
+            object_instance=new_assignment,
         )
         messages.success(request, "Asset owner transferred successfully.")
     except DRFValidationError as exc:
@@ -159,6 +186,7 @@ def transfer_submit_view(request, assignment_id):
     return redirect("asset-list")
 
 
+@assetops_operator_required
 @require_POST
 def transfer_owner_submit_view(request, asset_id):
     asset = get_object_or_404(Asset, pk=asset_id)
@@ -175,7 +203,14 @@ def transfer_owner_submit_view(request, asset_id):
         notes = request_serializer.validated_data.get("notes", "")
 
         if asset.status == Asset.AssetStatus.IN_STOCK:
-            assign_asset(employee=to_employee, asset=asset, notes=notes)
+            assignment = assign_asset(employee=to_employee, asset=asset, notes=notes)
+            notify_default_admin_group_for_change(
+                actor=request.user,
+                resource_type="assignment",
+                action="assign",
+                object_label=str(assignment),
+                object_instance=assignment,
+            )
             messages.success(request, "Asset owner assigned successfully.")
         elif asset.status == Asset.AssetStatus.ASSIGNED:
             assignment = Assignment.objects.filter(
@@ -186,10 +221,17 @@ def transfer_owner_submit_view(request, asset_id):
                 raise ValidationError(
                     {"asset": "Asset is marked assigned but has no active assignment."}
                 )
-            transfer_asset(
+            new_assignment = transfer_asset(
                 assignment=assignment,
                 to_employee=to_employee,
                 notes=notes,
+            )
+            notify_default_admin_group_for_change(
+                actor=request.user,
+                resource_type="assignment",
+                action="transfer",
+                object_label=str(new_assignment),
+                object_instance=new_assignment,
             )
             messages.success(request, "Asset owner transferred successfully.")
         else:
@@ -204,6 +246,7 @@ def transfer_owner_submit_view(request, asset_id):
     return redirect(_resolve_next_url(request, "asset-list"))
 
 
+@assetops_operator_required
 @require_POST
 def assign_asset_view(request):
     try:
@@ -217,6 +260,13 @@ def assign_asset_view(request):
             asset=request_serializer.validated_data["asset"],
             notes=request_serializer.validated_data.get("notes", ""),
         )
+        notify_default_admin_group_for_change(
+            actor=request.user,
+            resource_type="assignment",
+            action="assign",
+            object_label=str(assignment),
+            object_instance=assignment,
+        )
     except ValidationError as exc:
         return JsonResponse({"errors": _format_validation_error(exc)}, status=400)
 
@@ -224,6 +274,7 @@ def assign_asset_view(request):
     return JsonResponse(response_serializer.data, status=201)
 
 
+@assetops_operator_required
 @require_POST
 def return_asset_view(request, assignment_id):
     try:
@@ -244,6 +295,13 @@ def return_asset_view(request, assignment_id):
             notes=request_serializer.validated_data.get("notes"),
             physical_location=request_serializer.validated_data.get("physical_location"),
         )
+        notify_default_admin_group_for_change(
+            actor=request.user,
+            resource_type="assignment",
+            action="return",
+            object_label=str(updated),
+            object_instance=updated,
+        )
     except ValidationError as exc:
         return JsonResponse({"errors": _format_validation_error(exc)}, status=400)
 
@@ -251,6 +309,7 @@ def return_asset_view(request, assignment_id):
     return JsonResponse(response_serializer.data)
 
 
+@assetops_operator_required
 @require_GET
 def offboarding_check_view(request, employee_id):
     employee = Employee.objects.filter(pk=employee_id).first()
@@ -274,6 +333,7 @@ def offboarding_check_view(request, employee_id):
     return JsonResponse(response_serializer.validated_data)
 
 
+@assetops_operator_required
 @require_POST
 def transfer_asset_view(request, assignment_id):
     try:
@@ -293,6 +353,13 @@ def transfer_asset_view(request, assignment_id):
             assignment=assignment,
             to_employee=request_serializer.validated_data["to_employee"],
             notes=request_serializer.validated_data.get("notes", ""),
+        )
+        notify_default_admin_group_for_change(
+            actor=request.user,
+            resource_type="assignment",
+            action="transfer",
+            object_label=str(new_assignment),
+            object_instance=new_assignment,
         )
     except ValidationError as exc:
         return JsonResponse({"errors": _format_validation_error(exc)}, status=400)

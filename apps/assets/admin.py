@@ -1,5 +1,12 @@
 from django.contrib import admin
-from apps.assets.models import Asset
+from apps.assets.models import Asset, AssetType
+
+
+@admin.register(AssetType)
+class AssetTypeAdmin(admin.ModelAdmin):
+    list_display = ("id", "name", "code", "default_admin_group")
+    search_fields = ("name", "code")
+    list_filter = ("default_admin_group",)
 
 @admin.register(Asset)
 class AssetAdmin(admin.ModelAdmin):

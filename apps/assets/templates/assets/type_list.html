@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Asset Types</title>
+  <style>
+    :root {
+      --bg: #f4f7fc;
+      --panel: #ffffff;
+      --ink: #0f1f35;
+      --muted: #5c6b82;
+      --border: #d9e1ef;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Avenir Next", "Segoe UI", sans-serif;
+      color: var(--ink);
+      background:
+        radial-gradient(circle at 95% 0%, #dff4ec 0%, transparent 30%),
+        radial-gradient(circle at 5% 5%, #e6ecff 0%, transparent 35%),
+        var(--bg);
+    }
+    .wrap { max-width: 1100px; margin: 0 auto; padding: 24px; display: grid; gap: 14px; }
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 16px;
+      box-shadow: 0 10px 24px rgba(15, 31, 53, 0.05);
+    }
+    .header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+    h1 { margin: 0; font-size: 30px; }
+    .subtitle { margin: 6px 0 0; color: var(--muted); }
+    .actions-top a {
+      text-decoration: none;
+      color: #166534;
+      background: #e8f8ef;
+      border: 1px solid #cfe9d6;
+      padding: 8px 12px;
+      border-radius: 10px;
+      font-weight: 700;
+      font-size: 13px;
+      display: inline-block;
+    }
+    table { width: 100%; border-collapse: collapse; font-size: 14px; }
+    th, td {
+      padding: 10px;
+      border-bottom: 1px solid var(--border);
+      text-align: left;
+      vertical-align: top;
+    }
+    th { color: var(--muted); font-weight: 600; }
+    .row-actions {
+      display: flex;
+      gap: 8px;
+    }
+    .row-actions a,
+    .row-actions button {
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      padding: 7px 9px;
+      font-size: 13px;
+      text-decoration: none;
+      background: #f8fbff;
+      color: #1d4ed8;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    .row-actions button {
+      background: #fdecec;
+      color: #b91c1c;
+      border-color: #f5c3c3;
+    }
+    .messages { display: grid; gap: 8px; }
+    .msg { padding: 10px 12px; border-radius: 10px; font-size: 13px; }
+    .msg.success { background: #e8f8ef; color: #166534; }
+    .msg.error { background: #fdecec; color: #b91c1c; }
+  </style>
+</head>
+<body>
+  {% include "components/global_nav.html" %}
+  <main class="wrap">
+    {% if messages %}
+      <section class="messages">
+        {% for message in messages %}
+          <div class="msg {{ message.tags|default:'success' }}">{{ message }}</div>
+        {% endfor %}
+      </section>
+    {% endif %}
+    <section class="panel header">
+      <div>
+        <h1>Asset Types</h1>
+        <p class="subtitle">Define asset categories and the default operator group responsible for each one.</p>
+      </div>
+      <div class="actions-top">
+        <a href="{% url 'asset-type-create' %}">+ Create Asset Type</a>
+      </div>
+    </section>
+
+    <section class="panel">
+      <table>
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>Code</th>
+            <th>Default Group</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for asset_type in asset_types %}
+            <tr>
+              <td>{{ asset_type.name }}</td>
+              <td>{{ asset_type.code }}</td>
+              <td>{{ asset_type.default_admin_group.name }}</td>
+              <td>
+                <div class="row-actions">
+                  <a href="{% url 'asset-type-update' asset_type.id %}">Edit</a>
+                  <form method="post" action="{% url 'asset-type-delete' asset_type.id %}">
+                    {% csrf_token %}
+                    <button type="submit">Delete</button>
+                  </form>
+                </div>
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </section>
+  </main>
+</body>
+</html>

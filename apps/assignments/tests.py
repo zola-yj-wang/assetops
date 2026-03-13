@@ -1,3 +1,5 @@
+from django.contrib.auth.models import Group, User
+from django.core import mail
 from django.core.exceptions import ValidationError
 from django.test import TestCase
 from django.urls import resolve, reverse
@@ -9,8 +11,27 @@ from apps.assignments.services import (
     return_asset,
     transfer_asset,
 )
-from apps.assets.models import Asset
+from apps.assets.models import Asset, AssetType
 from apps.employees.models import Employee
+
+
+def get_asset_type(code):
+    return AssetType.objects.get(code=code)
+
+
+class AssignmentOperatorAccessMixin:
+    operator_group = "IT"
+
+    def setUp(self):
+        super().setUp()
+        self.user = User.objects.create_user(
+            username=f"{self.operator_group.lower()}-operator",
+            email=f"{self.operator_group.lower()}-operator@example.com",
+            password="password123",
+        )
+        operator_group, _ = Group.objects.get_or_create(name=self.operator_group)
+        self.user.groups.add(operator_group)
+        self.client.force_login(self.user)
 
 
 class AssignmentServiceTestCase(TestCase):
@@ -36,7 +57,7 @@ class AssignmentServiceTestCase(TestCase):
         self.asset = Asset.objects.create(
             asset_tag="LT-001",
             serial_number="SN-LT-001",
-            asset_type=Asset.AssetType.LAPTOP,
+            asset_type=get_asset_type(Asset.AssetType.LAPTOP),
             status=Asset.AssetStatus.IN_STOCK,
         )
 
@@ -212,7 +233,7 @@ class AssignmentModelValidationTestCase(TestCase):
         self.asset = Asset.objects.create(
             asset_tag="LT-002",
             serial_number="SN-LT-002",
-            asset_type=Asset.AssetType.LAPTOP,
+            asset_type=get_asset_type(Asset.AssetType.LAPTOP),
             status=Asset.AssetStatus.IN_STOCK,
         )
 
@@ -265,7 +286,7 @@ class AssignmentModelValidationTestCase(TestCase):
             Assignment.objects.create(employee=another_employee, asset=self.asset)
 
 
-class AssignmentApiErrorMessageTestCase(TestCase):
+class AssignmentApiErrorMessageTestCase(AssignmentOperatorAccessMixin, TestCase):
     def test_assign_api_returns_clear_error_for_invalid_json(self):
         response = self.client.post(
             reverse("assignment-assign"),
@@ -300,7 +321,7 @@ class AssignmentApiErrorMessageTestCase(TestCase):
         asset = Asset.objects.create(
             asset_tag="LT-API-1",
             serial_number="SN-LT-API-1",
-            asset_type=Asset.AssetType.LAPTOP,
+            asset_type=get_asset_type(Asset.AssetType.LAPTOP),
             status=Asset.AssetStatus.IN_STOCK,
         )
         assignment = assign_asset(employee=employee, asset=asset)
@@ -317,8 +338,9 @@ class AssignmentApiErrorMessageTestCase(TestCase):
         )
 
 
-class AssignmentWebTransferTestCase(TestCase):
+class AssignmentWebTransferTestCase(AssignmentOperatorAccessMixin, TestCase):
     def setUp(self):
+        super().setUp()
         self.from_employee = Employee.objects.create(
             first_name="Ada",
             last_name="Lovelace",
@@ -334,7 +356,7 @@ class AssignmentWebTransferTestCase(TestCase):
         self.asset = Asset.objects.create(
             asset_tag="LT-WEB-1",
             serial_number="SN-LT-WEB-1",
-            asset_type=Asset.AssetType.LAPTOP,
+            asset_type=get_asset_type(Asset.AssetType.LAPTOP),
             status=Asset.AssetStatus.IN_STOCK,
         )
         self.assignment = assign_asset(employee=self.from_employee, asset=self.asset)
@@ -366,7 +388,7 @@ class AssignmentWebTransferTestCase(TestCase):
         in_stock_asset = Asset.objects.create(
             asset_tag="LT-WEB-2",
             serial_number="SN-LT-WEB-2",
-            asset_type=Asset.AssetType.LAPTOP,
+            asset_type=get_asset_type(Asset.AssetType.LAPTOP),
             status=Asset.AssetStatus.IN_STOCK,
         )
 
@@ -388,6 +410,43 @@ class AssignmentWebTransferTestCase(TestCase):
             status=Assignment.AssignmentStatus.ASSIGNED,
         )
         self.assertEqual(new_assignment.employee_id, self.to_employee.id)
+
+    def test_assignment_change_notifies_group_derived_from_asset_type(self):
+        om_group, _ = Group.objects.get_or_create(name="OM")
+        om_user = User.objects.create_user(
+            username="om-assignment-admin",
+            email="om-assignment-admin@example.com",
+            password="password123",
+        )
+        om_user.groups.add(om_group)
+
+        hr_group, _ = Group.objects.get_or_create(name="HR")
+        self.user.groups.clear()
+        self.user.groups.add(hr_group)
+        self.asset.asset_type = get_asset_type(Asset.AssetType.PHONE)
+        self.asset.save(update_fields=["asset_type", "updated_at"])
+
+        response = self.client.post(
+            reverse(
+                "asset-transfer-owner-submit",
+                kwargs={"asset_id": self.asset.id},
+            ),
+            data={"to_employee_id": self.to_employee.id, "notes": "cross-group handover"},
+            follow=False,
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertEqual(mail.outbox[0].to, ["om-assignment-admin@example.com"])
+
+    def test_anonymous_user_cannot_access_assignment_routes(self):
+        self.client.logout()
+        response = self.client.get(reverse("assignment-dashboard"))
+        self.assertRedirects(
+            response,
+            f"{reverse('login')}?next={reverse('assignment-dashboard')}",
+            fetch_redirect_response=False,
+        )
 
 
 class AssignmentUrlPatternTestCase(TestCase):

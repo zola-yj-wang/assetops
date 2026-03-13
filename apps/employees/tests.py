@@ -1,13 +1,34 @@
+from django.contrib.auth.models import Group, User
+from django.core import mail
 from django.test import TestCase
 from django.urls import reverse
 
 from apps.assignments.models import Assignment
 from apps.assignments.services import assign_asset
-from apps.assets.models import Asset
+from apps.assets.models import Asset, AssetType
 from apps.employees.models import Employee
 
 
-class EmployeeListPageTestCase(TestCase):
+def get_asset_type(code):
+    return AssetType.objects.get(code=code)
+
+
+class EmployeeOperatorAccessMixin:
+    operator_group = "HR"
+
+    def setUp(self):
+        super().setUp()
+        self.user = User.objects.create_user(
+            username=f"{self.operator_group.lower()}-operator",
+            email=f"{self.operator_group.lower()}-operator@example.com",
+            password="password123",
+        )
+        operator_group, _ = Group.objects.get_or_create(name=self.operator_group)
+        self.user.groups.add(operator_group)
+        self.client.force_login(self.user)
+
+
+class EmployeeListPageTestCase(EmployeeOperatorAccessMixin, TestCase):
     def test_employee_list_page_renders_and_links_to_detail(self):
         employee = Employee.objects.create(
             first_name="Linus",
@@ -23,7 +44,7 @@ class EmployeeListPageTestCase(TestCase):
         self.assertContains(response, reverse("employee-detail", kwargs={"employee_id": employee.id}))
 
 
-class EmployeeDetailPageTestCase(TestCase):
+class EmployeeDetailPageTestCase(EmployeeOperatorAccessMixin, TestCase):
     def test_employee_detail_page_renders(self):
         employee = Employee.objects.create(
             first_name="Ada",
@@ -60,7 +81,7 @@ class EmployeeDetailPageTestCase(TestCase):
         asset = Asset.objects.create(
             asset_tag="LT-EMP-1",
             serial_number="SN-EMP-1",
-            asset_type=Asset.AssetType.LAPTOP,
+            asset_type=get_asset_type(Asset.AssetType.LAPTOP),
             status=Asset.AssetStatus.IN_STOCK,
         )
         original_assignment = assign_asset(employee=owner, asset=asset)
@@ -89,7 +110,7 @@ class EmployeeDetailPageTestCase(TestCase):
         self.assertEqual(new_assignment.employee_id, target.id)
 
 
-class EmployeeCrudPageTestCase(TestCase):
+class EmployeeCrudPageTestCase(EmployeeOperatorAccessMixin, TestCase):
     def test_employee_create_update_delete_flow(self):
         create_response = self.client.post(
             reverse("employee-create"),
@@ -145,3 +166,44 @@ class EmployeeCrudPageTestCase(TestCase):
             fetch_redirect_response=False,
         )
         self.assertFalse(Employee.objects.filter(id=employee.id).exists())
+
+    def test_non_hr_change_sends_notification_to_hr_group(self):
+        hr_group, _ = Group.objects.get_or_create(name="HR")
+        hr_user = User.objects.create_user(
+            username="hr-admin",
+            email="hr-admin@example.com",
+            password="password123",
+        )
+        hr_user.groups.add(hr_group)
+
+        om_group, _ = Group.objects.get_or_create(name="OM")
+        self.user.groups.clear()
+        self.user.groups.add(om_group)
+
+        response = self.client.post(
+            reverse("employee-create"),
+            data={
+                "first_name": "Cross",
+                "last_name": "Group",
+                "email": "cross-group@example.com",
+                "department": Employee.Department.HR,
+                "location": "Amsterdam",
+                "employment_status": Employee.EmploymentStatus.ACTIVE,
+                "start_date": "",
+                "end_date": "",
+            },
+            follow=False,
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertEqual(mail.outbox[0].to, ["hr-admin@example.com"])
+
+    def test_anonymous_user_cannot_access_employee_pages(self):
+        self.client.logout()
+        response = self.client.get(reverse("employee-list"))
+        self.assertRedirects(
+            response,
+            f"{reverse('login')}?next={reverse('employee-list')}",
+            fetch_redirect_response=False,
+        )

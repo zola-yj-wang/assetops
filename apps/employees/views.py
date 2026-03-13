@@ -2,11 +2,14 @@ from django.contrib import messages
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_POST
 
+from apps.accounts.decorators import assetops_operator_required
+from apps.accounts.services import notify_default_admin_group_for_change
 from apps.assignments.models import Assignment
 from apps.employees.forms import EmployeeForm
 from apps.employees.models import Employee
 
 
+@assetops_operator_required
 def employee_list_view(request):
     employees = Employee.objects.order_by("last_name", "first_name")
     context = {
@@ -15,6 +18,7 @@ def employee_list_view(request):
     return render(request, "employees/list.html", context)
 
 
+@assetops_operator_required
 def employee_detail_view(request, employee_id):
     employee = Employee.objects.filter(pk=employee_id).first()
     if employee is None:
@@ -59,11 +63,18 @@ def employee_detail_view(request, employee_id):
     return render(request, "employees/detail.html", context)
 
 
+@assetops_operator_required
 def employee_create_view(request):
     if request.method == "POST":
         form = EmployeeForm(request.POST)
         if form.is_valid():
             employee = form.save()
+            notify_default_admin_group_for_change(
+                actor=request.user,
+                resource_type="employee",
+                action="create",
+                object_label=str(employee),
+            )
             messages.success(request, "Employee created successfully.")
             return redirect("employee-detail", employee_id=employee.id)
     else:
@@ -76,12 +87,19 @@ def employee_create_view(request):
     )
 
 
+@assetops_operator_required
 def employee_update_view(request, employee_id):
     employee = get_object_or_404(Employee, pk=employee_id)
     if request.method == "POST":
         form = EmployeeForm(request.POST, instance=employee)
         if form.is_valid():
             employee = form.save()
+            notify_default_admin_group_for_change(
+                actor=request.user,
+                resource_type="employee",
+                action="update",
+                object_label=str(employee),
+            )
             messages.success(request, "Employee updated successfully.")
             return redirect("employee-detail", employee_id=employee.id)
     else:
@@ -95,6 +113,7 @@ def employee_update_view(request, employee_id):
 
 
 @require_POST
+@assetops_operator_required
 def employee_delete_view(request, employee_id):
     employee = get_object_or_404(Employee, pk=employee_id)
     has_active_assignment = Assignment.objects.filter(
@@ -105,6 +124,13 @@ def employee_delete_view(request, employee_id):
         messages.error(request, "Cannot delete an employee with active assignments.")
         return redirect("employee-detail", employee_id=employee.id)
 
+    employee_label = str(employee)
     employee.delete()
+    notify_default_admin_group_for_change(
+        actor=request.user,
+        resource_type="employee",
+        action="delete",
+        object_label=employee_label,
+    )
     messages.success(request, "Employee deleted successfully.")
     return redirect("employee-list")

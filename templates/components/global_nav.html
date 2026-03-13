@@ -28,6 +28,7 @@
     display: flex;
     gap: 8px;
     flex-wrap: wrap;
+    align-items: center;
   }
   .global-nav-links a {
     text-decoration: none;
@@ -39,15 +40,45 @@
     font-size: 13px;
     font-weight: 700;
   }
+  .global-nav-user {
+    color: #5c6b82;
+    font-size: 13px;
+    font-weight: 700;
+    margin-left: 4px;
+  }
+  .global-nav-links form {
+    margin: 0;
+  }
+  .global-nav-links button {
+    text-decoration: none;
+    color: #b91c1c;
+    background: #fdecec;
+    border: 1px solid #f5c3c3;
+    padding: 7px 10px;
+    border-radius: 999px;
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+  }
 </style>
 <nav class="global-nav">
   <div class="global-nav-inner">
     <a class="global-nav-brand" href="{% url 'assignment-dashboard' %}">AssetOps</a>
     <div class="global-nav-links">
-      <a href="{% url 'assignment-dashboard' %}">Assignment Dashboard</a>
-      <a href="{% url 'asset-list' %}">Asset List</a>
-      <a href="{% url 'employee-list' %}">Employee List</a>
-      <a href="/admin/">Admin</a>
+      {% if request.user.is_authenticated %}
+        <a href="{% url 'assignment-dashboard' %}">Assignment Dashboard</a>
+        <a href="{% url 'asset-list' %}">Asset List</a>
+        <a href="{% url 'asset-type-list' %}">Asset Types</a>
+        <a href="{% url 'employee-list' %}">Employee List</a>
+        <a href="/admin/">Admin</a>
+        <span class="global-nav-user">{{ request.user.username }}</span>
+        <form method="post" action="{% url 'logout' %}">
+          {% csrf_token %}
+          <button type="submit">Logout</button>
+        </form>
+      {% else %}
+        <a href="{% url 'login' %}">Login</a>
+      {% endif %}
     </div>
   </div>
 </nav>

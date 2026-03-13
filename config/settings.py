@@ -126,6 +126,12 @@ USE_TZ = True
 
 STATIC_URL = 'static/'
 
+EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
+DEFAULT_FROM_EMAIL = "assetops@example.com"
+LOGIN_URL = "login"
+LOGIN_REDIRECT_URL = "assignment-dashboard"
+LOGOUT_REDIRECT_URL = "login"
+
 # Default primary key field type
 # https://docs.djangoproject.com/en/4.2/ref/settings/#default-auto-field
 

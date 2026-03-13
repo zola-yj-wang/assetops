@@ -28,16 +28,16 @@
       box-shadow: 0 10px 24px rgba(15, 31, 53, 0.05);
     }
     h1 { margin: 0 0 12px; }
+    .helper { margin: 0 0 16px; color: var(--muted); font-size: 14px; }
     .grid { display: grid; gap: 10px; }
     label { display: block; margin-bottom: 4px; color: var(--muted); font-size: 13px; }
-    input, select, textarea {
+    input, select {
       width: 100%;
       border: 1px solid var(--border);
       border-radius: 9px;
       padding: 9px 10px;
       font-size: 14px;
     }
-    textarea { min-height: 80px; }
     .actions { display: flex; gap: 8px; margin-top: 12px; }
     .actions button, .actions a {
       text-decoration: none;
@@ -58,6 +58,7 @@
   <main class="wrap">
     <section class="panel">
       <h1>{{ page_title }}</h1>
+      <p class="helper">Every asset type must have a default admin group. New assets will inherit notification routing from this type.</p>
       <form method="post">
         {% csrf_token %}
         <div class="grid">
@@ -71,8 +72,7 @@
         </div>
         <div class="actions">
           <button type="submit">{{ submit_label }}</button>
-          <a href="{% url asset_type_manage_url %}">Manage Asset Types</a>
-          <a href="{% url 'asset-list' %}">Cancel</a>
+          <a href="{% url 'asset-type-list' %}">Cancel</a>
         </div>
       </form>
     </section>

@@ -299,15 +299,15 @@
         <div>
           <label>Filter by Asset Type (Multiple selection)</label>
           <div class="filter-options">
-            {% for value, label in asset_type_choices %}
+            {% for asset_type in asset_type_choices %}
               <label class="filter-option">
                 <input
                   type="checkbox"
                   name="asset_type"
-                  value="{{ value }}"
-                  {% if value in selected_asset_types %}checked{% endif %}
+                  value="{{ asset_type.id }}"
+                  {% if asset_type.id|stringformat:"s" in selected_asset_types %}checked{% endif %}
                 >
-                {{ label }}
+                {{ asset_type.name }}
               </label>
             {% endfor %}
           </div>
